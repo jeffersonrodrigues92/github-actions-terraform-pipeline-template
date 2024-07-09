@@ -1,0 +1,164 @@
+name: 'Terraform pipeline'
+description: 'Terraform to plan and apply terraform files'
+
+inputs:
+  aws-region:
+    description: 'AWS region name to assume role'
+    required: true
+  environment:
+    description: 'The environment name that Terraform will apply the changes'
+    required: true
+  role-to-assume:
+    description: 'The AWS OICD role to assume'
+    required: true
+  service-github-token:
+    description: 'The service user token on Git Hub'
+    required: true
+  slack-webhook-url:
+    description: 'The webhook URL to send notifications to slack'
+    required: true
+  terraform-version:
+    description: 'The Terraform version that will be used during the pipeline'
+    required: true
+  terraform-resources-folder:
+    description: 'The Terraform resource folder name inside src terraform relative path'
+    required: true
+  terraform-resource-name:
+    description: 'The Terraform resource name that will be managed'
+    required: true
+  terraform-s3-bucket-state-name:
+    description: 'The Terraform S3 bucket that will save all states'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout in PR
+      uses: actions/checkout@v4
+      if: github.event_name == 'pull_request'
+      with:
+        ref: ${{ github.event.pull_request.head.ref }}
+        fetch-depth: 0
+
+    - name: Checkout in push
+      uses: actions/checkout@v4
+      if: github.event_name == 'push'
+      with:
+        fetch-depth: 0
+
+    - name: Configure AWS credentials from AWS account
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.role-to-assume }}
+        aws-region: ${{ inputs.aws-region }}
+        role-session-name: GITHUB-OIDC-TERRAFORM
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+
+    - name: Terraform Format
+      id: fmt
+      shell: bash
+      run: terraform fmt -check
+      working-directory: ./src/terraform/${{ inputs.terraform-resources-folder }}
+
+    - name: Terraform Init
+      id: init
+      shell: bash
+      run: |
+        terraform init -backend-config="bucket=${{ inputs.terraform-s3-bucket-state-name }}" \
+          -backend-config="key=${{ inputs.environment }}/${{ github.event.repository.name }}/${{ inputs.terraform-resource-name }}/terraform-state" \
+          -backend-config="region=us-east-2" \
+          -backend-config="dynamodb_table=terraform-lock-state"
+      working-directory: ./src/terraform/${{ inputs.terraform-resources-folder }}
+
+    - name: Terraform Validate
+      id: validate
+      shell: bash
+      run: terraform validate -no-color
+      working-directory: ./src/terraform/${{ inputs.terraform-resources-folder }}
+
+    - name: Terraform Plan
+      if: github.event_name == 'pull_request'
+      id: plan
+      continue-on-error: true
+      working-directory: ./src/terraform/${{ inputs.terraform-resources-folder }}
+      shell: bash
+      run: |
+        terraform plan -no-color -var-file=./tfvars/${{ inputs.environment }}.tfvars
+
+    - uses: actions/github-script@v7
+      if: github.event_name == 'pull_request'
+      env:
+        PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+      with:
+        github-token: ${{ inputs.service-github-token }}
+        script: |
+          const output = `#### Infra resource name \`${{ inputs.terraform-resource-name }}\`
+          #### Terraform Environment 💻\`${{ inputs.environment }}\`
+          #### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+          #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+          #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+          #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`\n
+          ${process.env.PLAN}
+          \`\`\`
+
+          </details>
+
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+
+    - name: Terraform Plan Status
+      if: steps.plan.outcome == 'failure'
+      shell: bash
+      working-directory: ./src/terraform/${{ inputs.terraform-resources-folder }}
+      run: exit 1
+
+    - name: Terraform Apply
+      if: github.event_name == 'push'
+      shell: bash
+      working-directory: ./src/terraform/${{ inputs.terraform-resources-folder }}
+      run: |
+        terraform apply -auto-approve -var-file=./tfvars/${{ inputs.environment }}.tfvars
+
+    - name: Slack Notification - failure
+      if: ${{ failure() }}
+      uses: rtCamp/action-slack-notify@v2
+      env:
+        SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
+        SLACK_COLOR: ${{job.status}}
+        SLACK_USERNAME: GitHub Actions
+        SLACK_ICON: https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png
+        SLACK_MESSAGE: 'Pipeline de infraestrutura no repo *${{ github.event.repository.name }}* falhou :fire:'
+
+    - name: Slack Notification - success
+      if: ${{ success() && github.event_name == 'push' }}
+      uses: rtCamp/action-slack-notify@v2
+      env:
+        SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
+        SLACK_COLOR: ${{job.status}}
+        SLACK_USERNAME: GitHub Actions
+        SLACK_ICON: https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png
+        SLACK_MESSAGE: 'Pipeline de infraestrutura no repo *${{ github.event.repository.name }}* executada com sucesso no ambiente de ${{ inputs.environment }} :rocket:'
+
+    - name: Slack Notification - success in PR
+      if: ${{ success() && github.event_name == 'pull_request' }}
+      uses: rtCamp/action-slack-notify@v2
+      env:
+        SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
+        SLACK_COLOR: ${{job.status}}
+        SLACK_USERNAME: GitHub Actions
+        SLACK_ICON: https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png
+        SLACK_MESSAGE: 'PR aberta no repositório *${{ github.event.repository.name }}* para deploy de infraestrutura no ambiente de ${{ inputs.environment }} :rocket:'
