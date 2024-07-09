@@ -14,9 +14,9 @@ inputs:
   service-github-token:
     description: 'The service user token on Git Hub'
     required: true
-  slack-webhook-url:
-    description: 'The webhook URL to send notifications to slack'
-    required: true
+  # slack-webhook-url:
+  #   description: 'The webhook URL to send notifications to slack'
+  #   required: true
   terraform-version:
     description: 'The Terraform version that will be used during the pipeline'
     required: true
@@ -133,32 +133,32 @@ runs:
       run: |
         terraform apply -auto-approve -var-file=./tfvars/${{ inputs.environment }}.tfvars
 
-    - name: Slack Notification - failure
-      if: ${{ failure() }}
-      uses: rtCamp/action-slack-notify@v2
-      env:
-        # SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
-        SLACK_COLOR: ${{job.status}}
-        SLACK_USERNAME: GitHub Actions
-        SLACK_ICON: https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png
-        SLACK_MESSAGE: 'Pipeline de infraestrutura no repo *${{ github.event.repository.name }}* falhou :fire:'
+    # - name: Slack Notification - failure
+    #   if: ${{ failure() }}
+    #   uses: rtCamp/action-slack-notify@v2
+    #   env:
+    #     # SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
+    #     SLACK_COLOR: ${{job.status}}
+    #     SLACK_USERNAME: GitHub Actions
+    #     SLACK_ICON: https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png
+    #     SLACK_MESSAGE: 'Pipeline de infraestrutura no repo *${{ github.event.repository.name }}* falhou :fire:'
 
-    - name: Slack Notification - success
-      if: ${{ success() && github.event_name == 'push' }}
-      uses: rtCamp/action-slack-notify@v2
-      env:
-        # SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
-        SLACK_COLOR: ${{job.status}}
-        SLACK_USERNAME: GitHub Actions
-        SLACK_ICON: https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png
-        SLACK_MESSAGE: 'Pipeline de infraestrutura no repo *${{ github.event.repository.name }}* executada com sucesso no ambiente de ${{ inputs.environment }} :rocket:'
+    # - name: Slack Notification - success
+    #   if: ${{ success() && github.event_name == 'push' }}
+    #   uses: rtCamp/action-slack-notify@v2
+    #   env:
+    #     # SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
+    #     SLACK_COLOR: ${{job.status}}
+    #     SLACK_USERNAME: GitHub Actions
+    #     SLACK_ICON: https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png
+    #     SLACK_MESSAGE: 'Pipeline de infraestrutura no repo *${{ github.event.repository.name }}* executada com sucesso no ambiente de ${{ inputs.environment }} :rocket:'
 
-    - name: Slack Notification - success in PR
-      if: ${{ success() && github.event_name == 'pull_request' }}
-      uses: rtCamp/action-slack-notify@v2
-      env:
-        SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
-        SLACK_COLOR: ${{job.status}}
-        SLACK_USERNAME: GitHub Actions
-        SLACK_ICON: https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png
-        SLACK_MESSAGE: 'PR aberta no repositório *${{ github.event.repository.name }}* para deploy de infraestrutura no ambiente de ${{ inputs.environment }} :rocket:'
+    # - name: Slack Notification - success in PR
+    #   if: ${{ success() && github.event_name == 'pull_request' }}
+    #   uses: rtCamp/action-slack-notify@v2
+    #   env:
+    #     SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
+    #     SLACK_COLOR: ${{job.status}}
+    #     SLACK_USERNAME: GitHub Actions
+    #     SLACK_ICON: https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png
+    #     SLACK_MESSAGE: 'PR aberta no repositório *${{ github.event.repository.name }}* para deploy de infraestrutura no ambiente de ${{ inputs.environment }} :rocket:'
