@@ -137,7 +137,7 @@ runs:
       if: ${{ failure() }}
       uses: rtCamp/action-slack-notify@v2
       env:
-        SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
+        # SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
         SLACK_COLOR: ${{job.status}}
         SLACK_USERNAME: GitHub Actions
         SLACK_ICON: https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png
@@ -147,7 +147,7 @@ runs:
       if: ${{ success() && github.event_name == 'push' }}
       uses: rtCamp/action-slack-notify@v2
       env:
-        SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
+        # SLACK_WEBHOOK: ${{ inputs.slack-webhook-url }}
         SLACK_COLOR: ${{job.status}}
         SLACK_USERNAME: GitHub Actions
         SLACK_ICON: https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png
